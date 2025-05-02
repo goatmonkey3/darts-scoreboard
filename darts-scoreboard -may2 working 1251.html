@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Darts Scoreboard - 301 & 501</title>
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet" />
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      font-family: 'Press Start 2P', cursive;
+      background-color: #000;
+      color: #ffcc00;
+      text-align: center;
+      padding: 20px;
+      margin: 0;
+      overflow-x: hidden;
+    }
+    h1 {
+      background-color: rgba(0, 0, 0, 0.8);
+      padding: 10px;
+      border-radius: 10px;
+      display: inline-block;
+      color: #ffcc00;
+    }
+    .scoreboard {
+      width: 100%;
+      max-width: 900px;
+      margin: 30px auto;
+      background: rgba(0, 0, 0, 0.8);
+      display: block;
+      padding: 20px;
+      border-radius: 15px;
+      overflow-x: auto;
+    }
+    .player {
+      width: 100%;
+      max-width: 600px;
+      margin: 10px auto;
+      padding: 15px;
+      background-color: rgba(0, 0, 0, 0.7);
+      border-radius: 10px;
+      box-shadow: 0 0 10px rgba(255, 204, 0, 0.5);
+    }
+    .player .score {
+      font-size: 32px;
+      margin: 10px 0;
+      font-weight: bold;
+    }
+    .player input[type="text"], .player input[type="number"] {
+      padding: 10px;
+      width: 100%;
+      max-width: 180px;
+      font-family: 'Press Start 2P', cursive;
+      margin: 5px;
+      border: 2px solid #ffcc00;
+      border-radius: 5px;
+      background: #000;
+      color: #ffcc00;
+    }
+    .player button {
+      font-family: 'Press Start 2P', cursive;
+      padding: 10px 20px;
+      border: none;
+      margin: 5px;
+      cursor: pointer;
+      border-radius: 5px;
+      color: #000;
+    }
+    .remove-player-button { background-color: #ff0000; color: white; }
+    .bust-button { background-color: red; color: white; }
+    .inactive { opacity: 0.5; }
+    #roundInfo {
+      margin: 20px 0;
+      background-color: rgba(0, 0, 0, 0.8);
+      padding: 10px;
+      border-radius: 10px;
+      display: inline-block;
+      font-size: 18px;
+    }
+    #finishBanner {
+      font-size: 22px;
+      color: red;
+      font-weight: bold;
+      margin-bottom: 10px;
+      opacity: 0;
+      transition: opacity 0.5s ease;
+    }
+    @keyframes shake {
+      0% { transform: translateX(0); }
+      25% { transform: translateX(-10px); }
+      50% { transform: translateX(10px); }
+      75% { transform: translateX(-5px); }
+      100% { transform: translateX(0); }
+    }
+    #finishBanner.shake { animation: shake 0.5s ease; }
+    #winnerBanner {
+      font-size: 18px;
+      color: #00ff00;
+      opacity: 0;
+      transition: opacity 1s ease;
+    }
+    .history {
+      font-size: 12px;
+      margin-top: 10px;
+      color: #cccc00;
+    }
+    @keyframes flashScore {
+      0% { transform: scale(1); background-color: #ffcc00; color: black; }
+      50% { transform: scale(1.2); background-color: #fff; color: black; }
+      100% { transform: scale(1); background-color: transparent; color: #ffcc00; }
+    }
+    .score.flash { animation: flashScore 0.6s ease-in-out; }
+    @keyframes shakeBust {
+      0% { transform: translateX(0); }
+      25% { transform: translateX(-5px); }
+      50% { transform: translateX(5px); }
+      75% { transform: translateX(-3px); }
+      100% { transform: translateX(0); }
+    }
+    .score.bust { animation: shakeBust 0.4s ease-in-out; color: red; }
+    @keyframes pulseWin {
+      0% { transform: scale(1); }
+      50% { transform: scale(1.3); color: lime; }
+      100% { transform: scale(1); }
+    }
+    .score.win { animation: pulseWin 1s ease-in-out; }
+  </style>
+</head>
+<body>
+  <div id="finishBanner">FINISH HIM!!!</div>
+  <h1>Darts Scoreboard</h1>
+  <div>
+    <label for="mode">Game Mode:</label>
+    <select id="mode" onchange="startNewGame()">
+      <option value="301">301</option>
+      <option value="501" selected>501</option>
+    </select>
+  </div>
+  <div id="roundInfo">Round 1 - Player 1's Turn</div>
+  <div id="bustBanner" style="font-size:18px;color:red;opacity:0;transition:opacity 0.5s ease;margin-top:10px;">BUST!</div>
+  <div id="winnerBanner"></div>
+  <div class="scoreboard" id="scoreboard"></div>
+  <button onclick="addPlayer()">Add Player</button>
+  <button onclick="startNewGame()">Start New Game</button>
+  <button onclick="resetScores()">Reset Scores</button>
+
+  <audio id="finishSound" src="https://media.memesoundeffects.com/2020/12/Finish-Him-Street-Fighter-Sound-Effect.mp3"></audio>
+  <audio id="winSound" src="https://www.myinstants.com/media/sounds/16_2.mp3" preload="auto"></audio>
+  <audio id="bustSound" src="https://www.myinstants.com/media/sounds/supermariobrothers-mariodies.mp3" preload="auto"></audio>
+  <audio id="scoreSound" src="https://www.myinstants.com/media/sounds/insert-coin-arcade-machine.mp3" preload="auto"></audio>
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.5.1/dist/confetti.browser.min.js"></script>
+  <script>
+    let playerCount = 2;
+    let scores = {};
+    let history = {};
+    let finishWarned = {};
+    let names = {};
+    let currentPlayer = 1;
+    let round = 1;
+    let gameOver = false;
+
+    function playSound(id) {
+      const sound = document.getElementById(id);
+      if (sound) {
+        sound.currentTime = 0;
+        sound.play().catch(e => console.warn("Audio error:", e));
+      }
+    }
+
+    function getGameMode() {
+      return parseInt(document.getElementById("mode").value);
+    }
+
+    function getName(player) {
+      const input = document.getElementById("name" + player);
+      return input && input.value.trim() ? input.value.trim() : "Player " + player;
+    }
+
+    function startNewGame() {
+      document.getElementById('finishBanner').style.opacity = 0;
+      document.getElementById('winnerBanner').textContent = '';
+      document.getElementById('winnerBanner').style.opacity = 0;
+      const mode = getGameMode();
+      scores = {};
+      history = {};
+      finishWarned = {};
+      names = {};
+      playerCount = 2;
+      currentPlayer = 1;
+      round = 1;
+      gameOver = false;
+
+      for (let i = 1; i <= playerCount; i++) {
+        scores[i] = mode;
+        history[i] = [];
+        finishWarned[i] = false;
+      }
+
+      renderPlayers();
+      updateTurnUI();
+    }
+
+    function resetScores() {
+      document.getElementById('finishBanner').style.opacity = 0;
+      document.getElementById('winnerBanner').textContent = '';
+      document.getElementById('winnerBanner').style.opacity = 0;
+      const mode = getGameMode();
+      for (let i = 1; i <= playerCount; i++) {
+        scores[i] = mode;
+        history[i] = [];
+        finishWarned[i] = false;
+      }
+      currentPlayer = 1;
+      round = 1;
+      gameOver = false;
+      updateScores();
+      updateTurnUI();
+    }
+
+    function addPlayer() {
+      if (playerCount >= 6) {
+        alert("Maximum of 6 players allowed.");
+        return;
+      }
+      playerCount++;
+      scores[playerCount] = getGameMode();
+      history[playerCount] = [];
+      finishWarned[playerCount] = false;
+      renderPlayers();
+    }
+
+    function renderPlayers() {
+      const board = document.getElementById("scoreboard");
+      board.innerHTML = "";
+      for (let i = 1; i <= playerCount; i++) {
+        const div = document.createElement("div");
+        div.className = "player";
+        div.id = "player" + i;
+        const nameValue = names[i] || `Player ${i}`;
+        div.innerHTML = `
+          <input type="text" id="name${i}" value="${nameValue}" />
+          <div class="score" id="score${i}">${scores[i]}</div>
+          <div class="history" id="history${i}">History: ${history[i]?.join(', ') || '-'}</div>
+          <input type="number" id="input${i}" placeholder="Score" />
+          <button onclick="submitScore(${i})">Submit</button>
+          <button onclick="editScore(${i})">Edit Score</button>
+          <button class="bust-button" onclick="bustPlayer(${i})">Bust</button>
+          <button class="remove-player-button" onclick="removePlayer(${i})">Remove Player</button>
+        `;
+        board.appendChild(div);
+
+        const nameInput = document.getElementById("name" + i);
+        if (nameInput) {
+          nameInput.oninput = () => {
+            names[i] = nameInput.value;
+            updateTurnUI();
+          };
+        }
+      }
+    }
+
+    function submitScore(player) {
+      if (gameOver || player !== currentPlayer) return;
+      const input = document.getElementById("input" + player);
+      const val = parseInt(input.value);
+      if (isNaN(val) || val < 0) return;
+
+      const remaining = scores[player] - val;
+      if (remaining === 0) {
+        scores[player] = 0;
+        gameOver = true;
+        document.getElementById("winnerBanner").textContent = getName(player) + " WINS!";
+        playSound("winSound");
+        document.getElementById("winnerBanner").style.opacity = 1;
+        const scoreEl = document.getElementById("score" + player);
+        if (scoreEl) {
+          scoreEl.classList.add("win");
+          setTimeout(() => scoreEl.classList.remove("win"), 1000);
+        }
+        confetti();
+      } else if (remaining < 0) {
+        const scoreEl = document.getElementById("score" + player);
+        if (scoreEl) {
+          scoreEl.classList.add("bust");
+          setTimeout(() => scoreEl.classList.remove("bust"), 600);
+        }
+        playSound("bustSound");
+        const bustBanner = document.getElementById("bustBanner");
+        bustBanner.style.opacity = 1;
+        setTimeout(() => bustBanner.style.opacity = 0, 2000);
+      } else {
+        scores[player] = remaining;
+        history[player].push(val);
+        playSound("scoreSound");
+        const scoreEl = document.getElementById("score" + player);
+        if (scoreEl) {
+          scoreEl.classList.add("flash");
+          setTimeout(() => scoreEl.classList.remove("flash"), 600);
+        }
+        nextTurn();
+      }
+
+      input.value = "";
+      updateScores();
+    }
+
+    function editScore(player) {
+      const newScore = prompt("Enter new score for " + getName(player) + ":");
+      const val = parseInt(newScore);
+      if (!isNaN(val) && val >= 0) {
+        scores[player] = val;
+        history[player].push("EDIT→" + val);
+        updateScores();
+      }
+    }
+
+    function bustPlayer(player) {
+      if (gameOver || player !== currentPlayer) return;
+      const scoreEl = document.getElementById("score" + player);
+      if (scoreEl) {
+        scoreEl.classList.add("bust");
+        setTimeout(() => scoreEl.classList.remove("bust"), 600);
+      }
+      history[player].push("BUST");
+      playSound("bustSound");
+      const bustBanner = document.getElementById("bustBanner");
+      bustBanner.style.opacity = 1;
+      setTimeout(() => bustBanner.style.opacity = 0, 2000);
+      nextTurn();
+      updateScores();
+    }
+
+    function removePlayer(player) {
+      if (playerCount <= 2) {
+        alert("At least 2 players required.");
+        return;
+      }
+      delete scores[player];
+      delete history[player];
+      delete finishWarned[player];
+      delete names[player];
+      playerCount--;
+      renderPlayers();
+    }
+
+    function updateScores() {
+      for (let i = 1; i <= playerCount; i++) {
+        const scoreEl = document.getElementById("score" + i);
+        const historyEl = document.getElementById("history" + i);
+        if (scoreEl) scoreEl.textContent = scores[i];
+        if (historyEl) historyEl.textContent = `History: ${history[i]?.join(', ') || '-'}`;
+
+        if (scores[i] > 0 && scores[i] <= 50 && !finishWarned[i] && i === currentPlayer) {
+          finishWarned[i] = true;
+          const banner = document.getElementById("finishBanner");
+          banner.style.opacity = 1;
+          banner.classList.add("shake");
+          setTimeout(() => banner.classList.remove("shake"), 600);
+          playSound("finishSound");
+        }
+      }
+    }
+
+    function nextTurn() {
+      currentPlayer = currentPlayer === playerCount ? 1 : currentPlayer + 1;
+      if (currentPlayer === 1) round++;
+      updateTurnUI();
+    }
+
+    function updateTurnUI() {
+      document.getElementById("roundInfo").textContent =
+        `Round ${round} - ${getName(currentPlayer)}'s Turn`;
+      for (let i = 1; i <= playerCount; i++) {
+        const div = document.getElementById("player" + i);
+        if (div) div.classList.toggle("inactive", i !== currentPlayer);
+      }
+    }
+
+    window.onload = startNewGame;
+  </script>
+</body>
+</html>
